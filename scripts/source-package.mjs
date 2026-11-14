@@ -5,7 +5,7 @@ const root = path.resolve('.'), version = JSON.parse(await fs.readFile('package.
 const folder = path.join(root, 'release', `KurAudio-${version}-source`);
 await fs.mkdir(folder, { recursive: true });
 for (const name of ['src', 'public', 'scripts', 'docs', 'tests', 'src-tauri/src', 'src-tauri/capabilities', 'src-tauri/icons']) await fs.cp(path.join(root, name), path.join(folder, name), { recursive: true });
-for (const name of ['package.json', 'package-lock.json', 'app-icon.svg', 'index.html', 'vite.config.ts', 'tsconfig.json', 'design-tokens.json', 'README.md', 'src-tauri/Cargo.toml', 'src-tauri/Cargo.lock', 'src-tauri/build.rs', 'src-tauri/tauri.conf.json']) {
+for (const name of ['package.json', 'package-lock.json', 'app-icon.svg', 'index.html', 'vite.config.ts', 'tsconfig.json', 'design-tokens.json', 'README.md', 'LICENSE', 'src-tauri/Cargo.toml', 'src-tauri/Cargo.lock', 'src-tauri/build.rs', 'src-tauri/tauri.conf.json']) {
   await fs.mkdir(path.dirname(path.join(folder, name)), { recursive: true });
   await fs.copyFile(path.join(root, name), path.join(folder, name));
 }

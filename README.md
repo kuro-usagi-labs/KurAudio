@@ -114,6 +114,6 @@ Buka [issue](https://github.com/kuro-usagi-labs/KurAudio/issues) dengan versi Ku
 
 ## Lisensi dan dependency
 
-Belum ada lisensi penggunaan ulang untuk kode KurAudio yang ditetapkan dalam repository ini. Ketersediaan source tidak otomatis memberikan izin penggunaan ulang atau redistribusi kode aplikasi.
+Kode KurAudio dilisensikan di bawah [MIT License](LICENSE). Kamu dapat menggunakan, memodifikasi, dan mendistribusikannya, termasuk untuk keperluan komersial, dengan menyertakan pemberitahuan hak cipta dan lisensinya.
 
 Dependency tetap mengikuti lisensi masing-masing. Encoder MP3 memakai **LAME / @breezystack/lamejs 1.2.7 (LGPL-3.0)**. Teks lisensi, source library, dan petunjuk relinking tersedia di [third-party/lamejs](third-party/lamejs). Distribusi Windows menyertakan `THIRD-PARTY.txt` dan arsip source aplikasi untuk keperluan build ulang/relinking.

@@ -48,6 +48,6 @@ Rilis memakai artefak build asli 30 Oktober 2026. Arsip source build asli dipert
 
 Pemeriksaan publikasi: 153 tes unit dan 7 smoke check pada executable Windows lulus. Checksum installer, portable ZIP, source ZIP, dan executable portable cocok dengan manifest asli. Audit native lama tetap merupakan bukti historis; pengujian installer pada Windows bersih belum dilakukan.
 
-Belum ada lisensi untuk kode aplikasi yang ditetapkan. Jangan menambahkan label MIT, GPL, atau lisensi lain ke KurAudio tanpa keputusan pemilik; lisensi dependency tetap harus dipenuhi.
+Kode KurAudio dilisensikan di bawah [MIT License](../LICENSE), sesuai keputusan pemilik. Sertakan `LICENSE` dalam distribusi source berikutnya. Lisensi dependency tetap harus dipenuhi; MIT untuk KurAudio tidak menggantikan LGPL-3.0 pada encoder LAME atau lisensi dependency lain.
 
 Pemeriksaan dependency npm pada persiapan publikasi melaporkan 0 kerentanan; build frontend produksi lulus. Vite memberi peringatan ukuran chunk utama di atas 500 kB, yang tidak menggagalkan build. Ini bukan audit keamanan lengkap atas dependency Rust atau seluruh aplikasi.
