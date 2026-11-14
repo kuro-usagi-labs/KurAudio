@@ -1,0 +1,25 @@
+.toggle-switch { position:relative; display:inline-flex; align-self:center; flex:0 0 var(--switch-width); width:var(--switch-width); height:var(--switch-height); border-radius:var(--radius-round); }
+.toggle-switch input { position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0; opacity:0; cursor:pointer; z-index:1; }
+.toggle-switch-track { position:relative; display:block; width:100%; height:100%; border-radius:inherit; background:var(--switch-off); box-shadow:inset 0 0 0 var(--switch-border) var(--border-strong); }
+.toggle-switch-thumb { position:absolute; top:var(--switch-inset); left:var(--switch-inset); width:var(--switch-thumb); height:var(--switch-thumb); border-radius:var(--radius-round); background:var(--switch-knob); box-shadow:var(--shadow-thumb); translate:0 0; }
+.toggle-switch input:checked + .toggle-switch-track { background:var(--switch-on); box-shadow:inset 0 0 0 var(--switch-border) var(--switch-on); }
+.toggle-switch input:checked + .toggle-switch-track .toggle-switch-thumb { translate:calc(var(--switch-width) - var(--switch-height)) 0; }
+.toggle-switch:has(input:focus-visible) { outline:var(--outline-width) solid var(--action-primary); outline-offset:var(--outline-offset); }
+.toggle-switch:has(input:disabled) { opacity:var(--switch-disabled-opacity); }
+.toggle-switch input:disabled { cursor:default; }
+
+@media (prefers-reduced-motion:no-preference) {
+ .toggle-switch-track { transition:background-color var(--duration-switch) var(--ease-out), box-shadow var(--duration-switch) var(--ease-out); }
+ .toggle-switch-thumb { transition:translate var(--duration-switch) var(--ease-out), width var(--duration-fast) var(--ease-out); }
+ .toggle-switch:has(input:active:not(:disabled)) .toggle-switch-thumb { width:calc(var(--switch-thumb) + var(--switch-press-stretch)); }
+ .toggle-switch:has(input:active:checked:not(:disabled)) .toggle-switch-thumb { translate:calc(var(--switch-width) - var(--switch-height) - var(--switch-press-stretch)) 0; }
+ .effect-section-reveal { transition:grid-template-rows var(--duration-settle) var(--ease-out), opacity var(--duration-normal) var(--ease-out); }
+ .motion-presence[data-state=exiting] > .effect-section-reveal { transition-duration:var(--duration-exit); }
+}
+.effect-section-reveal { display:grid; grid-template-rows:1fr; opacity:1; }
+.effect-section-clip { min-height:0; overflow:hidden; }
+.effect-section-body:not([hidden]) { animation:none; }
+.motion-presence[data-state=entering] > .effect-section-reveal,
+.motion-presence[data-state=exiting] > .effect-section-reveal { grid-template-rows:0fr; opacity:0; }
+html[data-reduce-motion=true] .toggle-switch:has(input:active:not(:disabled)) .toggle-switch-thumb { width:var(--switch-thumb); }
+html[data-reduce-motion=true] .toggle-switch:has(input:active:checked:not(:disabled)) .toggle-switch-thumb { translate:calc(var(--switch-width) - var(--switch-height)) 0; }

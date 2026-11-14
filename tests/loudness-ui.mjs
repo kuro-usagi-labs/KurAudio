@@ -1,0 +1,71 @@
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+
+const browser = await chromium.launch();
+const check = (value, label) => { assert.ok(value, label); console.log(`PASS ${label}`); };
+try {
+  const page = await (await browser.newContext({ viewport: { width: 420, height: 800 } })).newPage();
+  await page.goto('http://127.0.0.1:1422/tests/loudness-harness.html');
+  await page.waitForFunction(() => !!window.loudnessHarness);
+  check(await page.evaluate(() => window.loudnessHarness.mountPanel()), 'loudness panel mounts');
+  await page.waitForTimeout(100);
+  check(await page.getByRole('button', { name: 'Ukur loudness', exact: true }).count() === 1, 'loudness measurement action is visible');
+  const ids = await page.evaluate(() => {
+    const { audio, model } = window.loudnessHarness, p = model.emptyProject();
+    const add = (name, level, locked = false) => {
+      const buffer = new AudioBuffer({ numberOfChannels: 2, length: 96000, sampleRate: 48000 });
+      for (let ch = 0; ch < 2; ch++) for (let i = 0; i < buffer.length; i++) buffer.getChannelData(ch)[i] = level * Math.sin(2 * Math.PI * 1000 * i / 48000);
+      const asset = audio.putMedia(buffer, audio.encodeFloatWav(buffer), name); p.assets.push(asset); const clip = model.makeClip(asset, p.tracks[0].id, 0); clip.locked = locked; p.clips.push(clip); return clip.id;
+    };
+    const editable = add('Suara utama dengan nama sangat panjang untuk menguji batas panel', 10 ** (-23 / 20)), locked = add('Klip terkunci', 0.1, true), silence = add('Hening', 0);
+    model.editor.load(p); model.editor.select([editable, locked, silence]); return { editable, locked, silence };
+  });
+  await page.getByRole('button', { name: 'Ukur loudness', exact: true }).click();
+  await page.getByRole('button', { name: /Terapkan pencocokan/ }).waitFor({ state: 'visible' });
+  await page.waitForFunction(() => document.querySelectorAll('[data-loudness-result]').length === 3);
+  check(await page.locator('[data-loudness-result]').count() === 3, 'selected clip scope is measured sequentially by actual workers');
+  check(await page.getByText('Hening · tidak diubah', { exact: true }).count() === 1, 'silence is explicitly unmatchable');
+  const before = await page.evaluate(() => structuredClone(window.loudnessHarness.model.editor.get()));
+  await page.getByLabel('Target loudness').fill('-16');
+  await page.getByLabel('Batas true peak').fill('-1');
+  await page.getByRole('button', { name: /Terapkan pencocokan/ }).click();
+  const after = await page.evaluate(() => structuredClone(window.loudnessHarness.model.editor.get()));
+  const changed = after.project.clips.find(c => c.id === ids.editable), preserved = after.project.clips.find(c => c.id === ids.locked);
+  check(Math.abs(changed.loudnessGain - 2.239) < 0.02 && changed.gain === 1, 'matching changes only post-rack gain and reaches the selected target');
+  check(preserved.loudnessGain === undefined && after.project.clips.find(c => c.id === ids.silence).loudnessGain === undefined, 'locked clips and silence remain unchanged');
+  check(after.undoCount === before.undoCount + 1, 'batch matching creates one named Undo step');
+  await page.evaluate(() => window.loudnessHarness.model.editor.undo());
+  check(await page.evaluate(() => window.loudnessHarness.model.editor.get().project.clips.every(c => c.loudnessGain === undefined)), 'Undo restores actual output gains');
+  await page.evaluate(id => window.loudnessHarness.model.editor.select([id]), ids.editable);
+  await page.getByRole('button', { name: /^Semua klip/ }).click();
+  await page.getByRole('button', { name: 'Ukur loudness', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-loudness-result]').length === 3);
+  check(await page.locator('[data-loudness-result]').count() === 3, 'all-clip scope includes unselected clips');
+  await page.getByLabel('Target loudness').fill('-1');
+  await page.getByLabel('Batas true peak').fill('-12');
+  check(await page.locator('[data-loudness-limited="true"]').count() >= 1, 'unreachable targets disclose the peak or gain limit');
+  await page.getByLabel('Target loudness').fill('1');
+  check(await page.getByRole('button', { name: /Terapkan pencocokan/ }).isDisabled() && await page.getByRole('alert').count() === 1, 'out-of-range targets cannot be applied');
+  await page.getByLabel('Target loudness').fill('-1'); await page.getByLabel('Batas true peak').fill('');
+  check(await page.getByRole('button', { name: /Terapkan pencocokan/ }).isDisabled(), 'an empty ceiling cannot be mistaken for zero');
+  await page.getByLabel('Batas true peak').fill('-12');
+  await page.evaluate(() => { const { model } = window.loudnessHarness; model.editor.edit('Source edit', p => { p.clips[0].gain = 0.4; }); });
+  check(await page.getByRole('button', { name: /Terapkan pencocokan/ }).isDisabled(), 'an audio edit invalidates the measured result before application');
+  await page.getByRole('button', { name: 'Ukur loudness', exact: true }).click();
+  await page.getByRole('button', { name: 'Batalkan analisis', exact: true }).click();
+  await page.waitForTimeout(150);
+  check(await page.getByRole('button', { name: /Terapkan pencocokan/ }).isDisabled(), 'cancelled analysis cannot publish late matching results');
+  await page.evaluate(() => {
+    const { audio, model } = window.loudnessHarness, long = new AudioBuffer({ numberOfChannels: 2, length: 48000 * 45, sampleRate: 48000 }); long.getChannelData(0).fill(0.25); long.getChannelData(1).fill(0.25);
+    const asset = audio.putMedia(long, new Uint8Array(), 'Long worker fixture'); let id;
+    model.editor.edit('Long source fixture', p => { p.assets.push(asset); const clip = model.makeClip(asset, p.tracks[0].id, 0); id = clip.id; p.clips.push(clip); }); model.editor.select([id]);
+  });
+  await page.getByRole('button', { name: /^Klip terpilih/ }).click();
+  await page.getByRole('button', { name: 'Ukur loudness', exact: true }).click();
+  await page.evaluate(() => { const { model } = window.loudnessHarness; model.editor.load({ ...model.editor.get().project, id: 'different-project' }); });
+  await page.waitForTimeout(200);
+  check(await page.getByRole('button', { name: /Terapkan pencocokan/ }).isDisabled(), 'changing projects discards measurement results');
+  check(await page.locator('[data-loudness-result]').count() === 0, 'a different project cannot receive a late in-flight analysis result');
+  const geometry = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
+  check(geometry.scrollWidth <= geometry.width, 'long clip names and controls fit the narrow panel');
+} finally { await browser.close(); }

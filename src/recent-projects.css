@@ -1,0 +1,19 @@
+.home-recents { margin-top:var(--size-xl); padding-top:var(--size-xl); border-top:1px solid var(--border-default); min-width:0; }
+.home-recents h2 { margin:0 0 var(--size-sm); color:var(--text-secondary); font-size:0.75rem; font-weight:550; }
+.recent-project-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--size-xs); }
+.recent-project-row { display:flex; align-items:center; min-width:0; gap:var(--size-xs); }
+.recent-project-open { flex:1; justify-content:flex-start; min-width:0; min-height:3.5rem; gap:var(--size-md); padding:var(--size-sm); text-align:left; }
+.recent-project-open > svg { flex-shrink:0; color:var(--text-secondary); }
+.recent-project-text { flex:1; min-width:0; }
+.recent-project-text strong,.recent-project-text small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.recent-project-text strong { font-size:0.8125rem; font-weight:500; color:var(--text-primary); }
+.recent-project-text small { margin-top:var(--size-xs); font-size:0.6875rem; color:var(--text-secondary); }
+.recent-project-text .recent-project-browser { color:var(--text-secondary); }
+.recent-project-date { flex-shrink:0; color:var(--text-secondary); font-size:0.6875rem; white-space:nowrap; }
+.recent-project-remove { flex-shrink:0; width:2rem; min-height:2rem; padding:var(--size-xs); color:var(--text-secondary); }
+@media (max-width:639px) {
+  .recent-project-open { gap:var(--size-sm); flex-wrap:wrap; }
+  .recent-project-open > svg { display:none; }
+  .recent-project-text { flex-basis:calc(100% - 1px); }
+  .recent-project-date { padding-top:var(--size-xs); }
+}

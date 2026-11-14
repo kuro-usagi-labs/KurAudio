@@ -1,0 +1,37 @@
+import {chromium} from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const browser=await chromium.launch();let count=0;
+const check=(condition,label)=>{assert.ok(condition,label);count++;console.log(`PASS ${label}`);};
+try{
+  const context=await browser.newContext({viewport:{width:1440,height:900}}),page=await context.newPage();
+  const settlePanels=()=>page.waitForFunction(()=>document.querySelector('.editor-body').getAnimations().length===0);
+  await page.goto('http://127.0.0.1:1422'); await page.getByRole('button', { name: 'Proyek baru', exact: true }).click();await page.getByRole('heading',{name:'Timeline kosong'}).waitFor();
+  const forbidden=['Ruang dengarmu','Setiap detail','Kebebasan untuk menyusun','Bawa suaramu','Mulai dari satu suara','Siap untuk ide','LOCAL AUDIO WORKSPACE','LOKAL & OFFLINE'];
+  const visibleCopy=await page.locator('body').innerText();
+  check(forbidden.every(text=>!visibleCopy.includes(text)),'deprecated promotional copy is absent');
+  const tokens=JSON.parse(await fs.readFile('design-tokens.json','utf8')).semantic;
+  check(![tokens.action.primary,...Object.values(tokens.track)].some(t=>{const s=t.$value;return parseInt(s.slice(3,5),16)>parseInt(s.slice(1,3),16)&&parseInt(s.slice(3,5),16)>parseInt(s.slice(5,7),16);}), 'accent and track palettes contain no green');
+  check((await page.locator('.app-header').boundingBox()).height<=64,'document header remains compact');
+  check((await page.locator('.transport').boundingBox()).height<=72,'transport keeps a compact desktop height');
+  const before=await page.getByTestId('timeline-scroll').boundingBox();await page.getByRole('button',{name:'Tampilkan media',exact:true}).click();
+  await page.waitForFunction(width=>document.querySelector('[data-testid=timeline-scroll]').getBoundingClientRect().width>=width+210,before.width);const collapsed=await page.getByTestId('timeline-scroll').boundingBox();
+  check(collapsed.width>=before.width+210,'collapsing media releases its width to the timeline');await page.getByRole('button',{name:'Tampilkan media',exact:true}).click();await settlePanels();
+  await page.getByRole('button',{name:'Buka sesi demo',exact:true}).click();await page.getByTestId('audio-clip').first().click({position:{x:40,y:50}});await page.getByLabel('Mulai di timeline',{exact:true}).waitFor();
+  check(await page.getByLabel('Mulai di timeline',{exact:true}).isVisible(),'selecting one clip opens contextual properties');
+  await settlePanels();const withInspector=(await page.getByTestId('timeline-scroll').boundingBox()).width;await page.getByRole('button',{name:'Tutup properti',exact:true}).click();
+  await page.waitForFunction(width=>document.querySelector('[data-testid=timeline-scroll]').getBoundingClientRect().width>=width+235,withInspector);
+  check((await page.getByTestId('timeline-scroll').boundingBox()).width>=withInspector+235,'closing properties releases its width to the timeline');
+  await page.getByRole('button',{name:'Properti',exact:true}).click();check(await page.getByLabel('Mulai di timeline',{exact:true}).isVisible(),'property toggle reopens the desktop inspector');
+  await page.setViewportSize({width:900,height:620});
+  await page.waitForFunction(()=>document.querySelector('.properties-toggle')?.getAttribute('aria-expanded')==='false');
+  check(await page.getByRole('button',{name:'Properti',exact:true}).getAttribute('aria-expanded')==='false','property ARIA state tracks actual drawer visibility after resize');
+  await page.getByRole('button',{name:'Properti',exact:true}).click();check(await page.getByLabel('Fade in',{exact:true}).isVisible(),'properties are available in a drawer at900px');await page.getByRole('button',{name:'Tutup properti'}).click();
+  check((await page.getByTestId('timeline-scroll').boundingBox()).height>=380,'timeline keeps room for three tracks at the minimum native window size');
+  await page.setViewportSize({width:1440,height:900});await page.getByRole('button',{name:'Ekspor audio',exact:true}).click();check(await page.getByRole('heading',{name:'Ekspor audio',exact:true}).isVisible(),'export dialog uses its action as the heading');
+  await page.waitForFunction(()=>{const modal=document.querySelector('.modal'),backdrop=document.querySelector('.modal-backdrop');return modal&&backdrop&&getComputedStyle(modal).opacity==='1'&&getComputedStyle(backdrop).opacity==='1';});
+  const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze();await fs.writeFile('test-results/redesign-axe.json',JSON.stringify(axe.violations,null,2));check(axe.violations.length===0,'export dialog has no automated WCAG A/AA violations');
+  await page.keyboard.press('Escape');await page.getByRole('button',{name:'Shortcut',exact:true}).click();check(await page.getByRole('heading',{name:'Pintasan keyboard',exact:true}).isVisible(),'help is available without a permanent shortcut banner');
+  console.log(`RESULT: ${count} redesign checks passed`);
+}finally{await browser.close();}

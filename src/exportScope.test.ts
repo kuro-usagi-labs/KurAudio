@@ -1,0 +1,13 @@
+import { describe, expect, it } from 'vitest';
+import { emptyProject, makeClip, defaultEffects, addCrossfades } from './model';
+import { resolveExportScope, exportFilename, estimateExportBytes } from './exportScope';
+function fixture() { const p=emptyProject(), a={id:'a',name:'speech.wav',duration:10,sampleRate:48000,channels:1};p.assets=[a];p.clips=[{...makeClip(a,p.tracks[0].id,2),duration:3,effects:{...defaultEffects(),reverb:30,decay:2}},{...makeClip(a,p.tracks[1].id,12),duration:2}];return p; }
+describe('export scope shared with UI',()=>{
+ it('includes project silence and effect tails',()=>{const p=fixture(),r=resolveExportScope(p,[],null,'project');expect(r.start).toBe(0);expect(r.end).toBe(14);expect(r.duration).toBe(14);expect(r.clipCount).toBe(2);});
+ it('starts selected export at its first clip and includes its tail',()=>{const p=fixture(),r=resolveExportScope(p,[p.clips[0].id],null,'selected');expect(r.project.clips).toHaveLength(1);expect(r.start).toBe(2);expect(r.end).toBe(7);expect(r.duration).toBe(5);expect(r.range).toMatchObject({start:2,end:7});expect(p.clips).toHaveLength(2);});
+ it('keeps an exact range and only its chosen tracks',()=>{const p=fixture(),range={start:3,end:4.25,trackIds:[p.tracks[0].id]},r=resolveExportScope(p,[],range,'range');expect(r.duration).toBe(1.25);expect(r.range).toEqual(range);expect(r.clipCount).toBe(1);});
+ it('rejects absent selection and absent or invalid ranges',()=>{const p=fixture();expect(()=>resolveExportScope(p,[],null,'selected')).toThrow();expect(()=>resolveExportScope(p,[],null,'range')).toThrow();expect(()=>resolveExportScope(p,[],{start:4,end:3,trackIds:[]},'range')).toThrow();});
+ it('retains the selected crossfade envelope without modifying the source',()=>{const p=fixture();p.clips=[{...p.clips[0],effects:defaultEffects()},{...p.clips[0],id:'next',start:4,duration:3,effects:defaultEffects()}];addCrossfades(p,p.clips.map(c=>c.id));const before=JSON.stringify(p),r=resolveExportScope(p,[p.clips[0].id],null,'selected');expect(r.project.clips[0].curve?.length).toBeGreaterThan(0);expect(JSON.stringify(p)).toBe(before);});
+ it('normalizes names once for summary and actual file writing',()=>{expect(exportFilename('  voice/test.MP3  ','wav','Fallback')).toBe('voice_test.wav');expect(exportFilename('...','mp3','Fallback')).toBe('Fallback.mp3');expect(exportFilename('CON','wav','Fallback')).toBe('_CON.wav');expect(exportFilename('','wav','My project')).toBe('My project.wav');});
+ it('estimates exact stereo PCM bytes and approximate MP3 bytes',()=>{expect(estimateExportBytes(2,'wav',48000,24,192)).toBe(576044);expect(estimateExportBytes(2,'mp3',48000,24,192)).toBe(48000);});
+});

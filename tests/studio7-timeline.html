@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="timeline-harness"></div><script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { Timeline } from '/src/Timeline.tsx';
+import * as model from '/src/model.ts';
+import * as audio from '/src/audio.ts';
+import '/src/theme.css';
+import '/src/styles.css';
+import '/src/motion.css';
+import '/src/comfort.css';
+window.__model = model; window.__audio = audio;
+const project = model.emptyProject(); project.tracks.push(model.makeTrack(3));
+const buffer = audio.audioContext().createBuffer(1, 48000 * 8, 48000);
+for (let i = 0; i < buffer.length; i++) buffer.getChannelData(0)[i] = Math.sin(i * 0.031) * 0.7;
+const asset = audio.putMedia(buffer, new Uint8Array(), 'source.wav'); project.assets = [asset];
+project.clips = [model.makeClip(asset, project.tracks[0].id, 1), model.makeClip(asset, project.tracks[1].id, 2), model.makeClip(asset, project.tracks[0].id, 6), model.makeClip(asset, project.tracks[2].id, 6)];
+project.clips.forEach((clip, index) => { clip.name = ['Alpha', 'Beta', 'Follower', 'Other'][index]; clip.duration = 2; });
+window.__baseline = structuredClone(project); window.__props = { scale: 100, tool: 'move', rippleScope: 'off' }; window.__actions = []; window.__errors = [];
+const host = document.querySelector('#timeline-harness'); Object.assign(host.style, { position: 'fixed', inset: '16px', display: 'flex' });
+const root = createRoot(host);
+const render = () => { const state = model.editor.get(); root.render(React.createElement(Timeline, { project: state.project, selected: state.selected, range: state.range, activeTrack: state.project.tracks[0].id, playhead: 0, snap: false, onScale(value) { window.__props.scale = value; render(); }, onSeek() {}, onSplit() {}, onImport() {}, onTrack() {}, onGesture() { audio.playback.stop(); }, onClipAction(action, id) { window.__actions.push({ action, id }); }, onError(error) { window.__errors.push(error); }, ...window.__props })); };
+model.editor.subscribe(render); window.__render = render; window.__reset = (patch = {}) => { window.__props = { scale: 100, tool: 'move', rippleScope: 'off', ...patch }; model.editor.load(structuredClone(window.__baseline)); render(); };
+window.__reset();
+</script></body></html>
+
+

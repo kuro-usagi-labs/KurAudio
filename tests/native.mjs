@@ -1,0 +1,56 @@
+import { chromium } from 'playwright';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const result=path.resolve('test-results');await fs.mkdir(result,{recursive:true});
+const wavPath=path.join(result,'native-source.wav'),projectPath=path.join(result,'native-project.kura'),exportPath=path.join(result,'native-mix.wav');
+const data=Buffer.alloc(44+48000*2);data.write('RIFF',0);data.writeUInt32LE(data.length-8,4);data.write('WAVEfmt ',8);data.writeUInt32LE(16,16);data.writeUInt16LE(1,20);data.writeUInt16LE(1,22);data.writeUInt32LE(48000,24);data.writeUInt32LE(96000,28);data.writeUInt16LE(2,32);data.writeUInt16LE(16,34);data.write('data',36);data.writeUInt32LE(data.length-44,40);for(let i=0;i<48000;i++)data.writeInt16LE(Math.round(Math.sin(i*2*Math.PI*440/48000)*8000),44+i*2);await fs.writeFile(wavPath,data);
+const app=spawn(path.resolve('src-tauri/target/release/kuraudio.exe'),[],{windowsHide:true,env:{...process.env,WEBVIEW2_USER_DATA_FOLDER:path.join(result,'native-profile'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:'--remote-debugging-port=9227 --remote-allow-origins=*'}});
+let browser,count=0;const check=(ok,text)=>{assert.ok(ok,text);count++;console.log(`PASS ${text}`);};
+try{
+  for(let i=0;i<60;i++){try{browser=await chromium.connectOverCDP('http://127.0.0.1:9227');break;}catch{await new Promise(r=>setTimeout(r,500));}}
+  assert.ok(browser,'native WebView starts');const page=browser.contexts()[0].pages()[0];await page.waitForSelector('.home-screen');await page.waitForTimeout(500);
+  await fs.access(path.join(result,'native-profile','EBWebView'));
+  if(await page.getByRole('button',{name:'Mulai baru',exact:true}).isVisible())await page.getByRole('button',{name:'Mulai baru',exact:true}).click();await page.getByRole('button',{name:'Proyek baru',exact:true}).click();
+  check(await page.evaluate(()=>window.isTauri===true),'release executable starts with the real Tauri desktop runtime');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  const help=page.getByRole('button',{name:'Shortcut',exact:true});await help.click();
+  await page.waitForFunction(()=>document.querySelector('.modal')?.getAnimations().some(a=>a.transitionProperty==='scale'));
+  check(await page.locator('.modal').evaluate(el=>el.getAnimations().some(a=>a.transitionProperty==='translate')),'native WebView animates the actual dialog scale and displacement');
+  await page.waitForTimeout(300);await page.keyboard.press('Escape');await page.locator('.modal').waitFor({state:'detached'});
+  check(await help.evaluate(el=>document.activeElement===el),'native dialog exit removes the overlay and restores keyboard focus');
+  const rawLength=await page.evaluate(async path=>(await window.__TAURI_INTERNALS__.invoke('read_audio',{path})).byteLength,wavPath);check(rawLength===data.length,'Rust reads a real source audio file from disk');
+  await page.getByTestId('audio-input').setInputFiles(wavPath);await page.locator('.asset-item').first().waitFor();check(await page.getByTestId('audio-clip').count()===0,'native audio import stays in the media library until deliberately placed');await page.locator('.asset-item').first().press('Enter');await page.getByTestId('audio-clip').first().waitFor();check(await page.getByTestId('audio-clip').count()===1,'native WebView imports and displays the real WAV waveform');
+  await page.getByTestId('audio-clip').first().click({position:{x:25,y:45}});await page.getByRole('tab',{name:'Efek',exact:true}).click();
+  const denoise=page.getByRole('slider',{name:'Denoise',exact:true});await denoise.focus();await page.keyboard.press('ArrowRight');
+  await page.getByRole('button',{name:'Putar (Space)',exact:true}).click();await page.getByRole('button',{name:'Jeda (Space)',exact:true}).waitFor();await page.waitForTimeout(150);
+  check(await page.getByLabel('Waktu playhead').textContent()!=='00:00.000','native packaged denoise worker prepares audio and playback advances');await page.getByRole('button',{name:'Stop',exact:true}).click();
+  const nativeTimeline=await page.getByTestId('timeline-scroll').boundingBox();await page.mouse.move(nativeTimeline.x+400,nativeTimeline.y+80);await page.keyboard.down('Control');await page.mouse.wheel(0,-100);await page.keyboard.up('Control');await page.waitForTimeout(100);
+  check(Number((await page.locator('.zoom-controls > span').textContent()).replace('%',''))>100,'native Ctrl + wheel zooms the timeline inside WebView2');
+  const descriptor={id:'native-asset',name:'native-source.wav',duration:1,sampleRate:48000,channels:1};
+  const p={id:'native-project',name:'Native roundtrip',sampleRate:48000,tracks:[{id:'track',name:'Voice',gain:1,muted:false,solo:false,color:0}],assets:[descriptor],clips:[{id:'clip',assetId:descriptor.id,trackId:'track',name:'Native audio',start:0,offset:0,duration:1,gain:1,fadeIn:0,fadeOut:0}]};
+  p.clips[0].effects={bypassed:false,denoise:10,reverb:20,decay:1.8,room:35,roomSize:'studio',echo:0,echoTime:0.28,bass:0,treble:0,compression:0};
+  const content=JSON.stringify({format:'kuraudio',version:1,project:p,media:[{id:descriptor.id,data:data.toString('base64')}]});
+  await page.evaluate(({path,content})=>window.__TAURI_INTERNALS__.invoke('write_project',{path,content}),{path:projectPath,content});
+  const readback=await page.evaluate(path=>window.__TAURI_INTERNALS__.invoke('read_project',{path}),projectPath);check(readback===content,'native atomic project save and read preserve embedded source audio');
+  await page.getByRole('button',{name:'Baru',exact:true}).click();await page.getByRole('button',{name:'Lanjut tanpa simpan',exact:true}).click();
+  await page.getByTestId('project-input').setInputFiles(projectPath);await page.getByTestId('audio-clip').first().waitFor();check(await page.getByTestId('audio-clip').count()===1,'native editor opens the .kura written by Rust');
+  await page.getByTestId('audio-clip').first().click({position:{x:25,y:45}});await page.getByRole('tab',{name:'Efek',exact:true}).click();
+  check(await page.getByRole('slider',{name:'Reverb',exact:true}).inputValue()==='20'&&await page.getByRole('slider',{name:'Denoise',exact:true}).inputValue()==='10','native project open restores persisted per-clip effect strengths');
+  const fallback=await page.evaluate(async data=>(await window.__TAURI_INTERNALS__.invoke('decode_audio',{bytesBase64:data})).byteLength,data.toString('base64'));check(fallback>data.length,'Rust Symphonia fallback returns a float WAV decoded from source');
+  await page.evaluate(async({source,path})=>{
+    const bytes=Uint8Array.from(atob(source),c=>c.charCodeAt(0)),ctx=new AudioContext(),decoded=await ctx.decodeAudioData(bytes.buffer);
+    const offline=new OfflineAudioContext(2,48000,48000),node=offline.createBufferSource();node.buffer=decoded;node.connect(offline.destination);node.start();const mix=await offline.startRendering();
+    let peak=0;for(const n of mix.getChannelData(0))peak=Math.max(peak,Math.abs(n));const scale=Math.pow(10,-1/20)/peak,pcm=new Uint8Array(mix.length*8),v=new DataView(pcm.buffer);
+    for(let f=0;f<mix.length;f++)for(let ch=0;ch<2;ch++)v.setFloat32((f*2+ch)*4,mix.getChannelData(ch)[f]*scale,true);
+    const chunks=[];for(let i=0;i<pcm.length;i+=32768)chunks.push(String.fromCharCode(...pcm.subarray(i,i+32768)));
+    await window.__TAURI_INTERNALS__.invoke('export_wav',{path,pcmBase64:btoa(chunks.join('')),sampleRate:48000,bits:24});await ctx.close();
+  },{source:data.toString('base64'),path:exportPath});
+  const output=await fs.readFile(exportPath);check(output.toString('ascii',0,4)==='RIFF'&&output.readUInt16LE(34)===24&&output.readUInt16LE(22)===2,'real Rust export writes stereo PCM24 WAV to disk');
+  let dataStart=12;while(output.toString('ascii',dataStart,dataStart+4)!=='data'){const size=output.readUInt32LE(dataStart+4);dataStart+=8+size+size%2;}dataStart+=8;
+  let peak=0;for(let i=dataStart;i<output.length;i+=3){let n=output.readUIntLE(i,3);if(n&0x800000)n-=0x1000000;peak=Math.max(peak,Math.abs(n)/8388608);}check(Math.abs(peak-Math.pow(10,-1/20))<0.001,'native exported audio retains -1 dBFS normalization');
+  await page.screenshot({path:path.join(result,'native-editor.png')});
+  await page.waitForTimeout(1200);await page.evaluate(()=>new Promise((resolve,reject)=>{const req=indexedDB.open('KurAudio',1);req.onsuccess=()=>{const tx=req.result.transaction('recovery','readwrite');tx.objectStore('recovery').clear();tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);};req.onerror=()=>reject(req.error);}));
+  console.log(`RESULT: ${count} native checks passed (real release executable and Rust IPC)`);
+}finally{if(browser)await browser.close();app.kill();}

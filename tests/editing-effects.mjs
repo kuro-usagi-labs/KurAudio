@@ -1,0 +1,127 @@
+import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+
+await fs.mkdir('test-results/editing-effects', { recursive: true });
+const rate = 16000, frames = rate * 3, wav = Buffer.alloc(44 + frames * 2);
+wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(frames * 2, 40);
+for (let i = 0; i < frames; i++) wav.writeInt16LE(Math.round(Math.sin(i * Math.PI * 2 * 370 / rate) * (0.04 + i / frames * 0.5) * 32767), 44 + i * 2);
+const browser = await chromium.launch(); let count = 0;
+const check = (value, name) => { assert.ok(value, name); console.log(`PASS ${name}`); count++; };
+try {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true }), page = await context.newPage();
+  const errors = []; page.on('pageerror', error => errors.push(String(error)));
+  await page.goto('http://127.0.0.1:1422'); await page.getByRole('button', { name: 'Proyek baru', exact: true }).click();
+  await page.evaluate(() => { window.__kurTestModules = Object.fromEntries(['model', 'audio', 'storage'].map(key => [key, performance.getEntriesByType('resource').find(entry => new URL(entry.name).pathname === '/src/' + key + '.ts').name])); });
+  await page.locator('.media-panel').evaluate((el, bytes) => { const transfer = new DataTransfer(); transfer.items.add(new File([new Uint8Array(bytes)], 'ramp.wav', { type: 'audio/wav' })); el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer })); }, [...wav]);
+  await page.locator('.asset-item').first().waitFor();
+  check(await page.getByTestId('audio-clip').count() === 0, 'dropping a file on media creates an asset without a timeline clip');
+  await page.waitForTimeout(300);
+  await page.locator('.asset-item').first().dragTo(page.getByTestId('lane-0'), { targetPosition: { x: 120, y: 40 } });
+  await page.getByTestId('audio-clip').first().waitFor();
+  check(await page.getByTestId('audio-clip').count() === 1, 'dragging media onto a lane creates exactly one clip');
+  const original = await page.evaluate(async () => { const { editor } = await import(window.__kurTestModules.model); return editor.get().project.clips[0]; });
+  check(Math.abs(original.start - 2.5) < 0.1, 'library drag uses the drop position in timeline seconds');
+  const clip = page.getByTestId('audio-clip').first(); await clip.click({ position: { x: 30, y: 45 } }); await page.waitForTimeout(320);
+  await page.getByRole('button', { name: 'Snapping (N)', exact: true }).click();
+  const bounds = await clip.boundingBox();
+  const beforeCanvas = await clip.locator('canvas').evaluate(el => el.toDataURL());
+  await page.mouse.move(bounds.x + 2, bounds.y + 55); await page.mouse.down(); await page.mouse.move(bounds.x + 26, bounds.y + 55, { steps: 8 }); await page.waitForTimeout(80);
+  const preview = await clip.locator('canvas').evaluate(el => ({ offset: Number(el.dataset.sourceOffset), duration: Number(el.dataset.sourceDuration), pixels: el.toDataURL() }));
+  const during = await page.evaluate(async () => (await import(window.__kurTestModules.model)).editor.get().project.clips[0]);
+  check(preview.offset > 0.4 && preview.duration < 2.6 && during.offset === 0, 'left trim previews the source range before committing project history');
+  check(preview.pixels === beforeCanvas && (await clip.boundingBox()).width < bounds.width - 20, 'held trim crops the stationary source waveform without resampling its pixels');
+  await page.screenshot({ path: 'test-results/editing-effects/trim-live.png' });
+  await page.mouse.up();
+  const committed = await page.evaluate(async () => (await import(window.__kurTestModules.model)).editor.get().project.clips[0]);
+  check(Math.abs(committed.offset - preview.offset) < 0.001 && Math.abs(committed.start + committed.duration - original.start - original.duration) < 0.001, 'left trim retains the original right edge and commits the exact preview');
+  const rightBounds = await clip.boundingBox(), oldDuration = committed.duration;
+  await page.mouse.move(rightBounds.x + rightBounds.width - 2, rightBounds.y + 55); await page.mouse.down(); await page.mouse.move(rightBounds.x + rightBounds.width - 26, rightBounds.y + 55, { steps: 8 }); await page.waitForTimeout(50);
+  const rightPreview = await clip.locator('canvas').evaluate(el => Number(el.dataset.sourceDuration));
+  check(rightPreview < oldDuration - 0.4, 'right trim updates its waveform source duration before release'); await page.mouse.up();
+
+  const timeline = page.getByTestId('timeline-scroll'), ruler = page.getByRole('slider', { name: 'Posisi playhead', exact: true });
+  const timelineBounds = await timeline.boundingBox(), x = timelineBounds.x + 460, y = timelineBounds.y + 100;
+  const beforeZoom = await ruler.boundingBox(); const timeBefore = (x - beforeZoom.x) / 48;
+  await page.mouse.move(x, y); await page.keyboard.down('Control'); await page.mouse.wheel(0, -100); await page.keyboard.up('Control'); await page.waitForTimeout(120);
+  const zoom = Number((await page.locator('.zoom-controls > span').textContent()).replace('%', '')), afterZoom = await ruler.boundingBox();
+  const timeAfter = (x - afterZoom.x) / (48 * zoom / 100);
+  check(zoom > 100, 'Ctrl + wheel up zooms into the timeline');
+  check(Math.abs(timeBefore - timeAfter) < 0.06, 'wheel zoom keeps the time under the pointer anchored');
+  await page.keyboard.down('Control'); await page.mouse.wheel(0, 100); await page.keyboard.up('Control'); await page.waitForTimeout(120);
+  check(Number((await page.locator('.zoom-controls > span').textContent()).replace('%', '')) < zoom, 'Ctrl + wheel down zooms out');
+  check(await page.evaluate(() => devicePixelRatio) === 1, 'Ctrl + timeline wheel does not zoom the browser page');
+
+  await clip.focus(); await page.keyboard.press('Control+c');
+  check(await page.getByRole('button', { name: 'Pilih & geser (V)', exact: true }).getAttribute('aria-pressed') === 'true', 'Ctrl+C copies clips without switching to the cut tool');
+  await page.keyboard.press('Home'); await page.keyboard.press('Control+v');
+  check(await page.getByTestId('audio-clip').count() === 2, 'Ctrl+V pastes the copied clip at the playhead');
+  await page.keyboard.press('Control+x'); check(await page.getByTestId('audio-clip').count() === 1, 'Ctrl+X cuts the selection into the internal clipboard');
+  await page.keyboard.press('Control+z'); check(await page.getByTestId('audio-clip').count() === 2, 'cut remains undoable');
+  await clip.click({ position: { x: 25, y: 45 } }); await page.keyboard.press('e');
+  await page.getByRole('switch', { name: 'Reverb', exact: true }).check();
+  check(await page.getByRole('tab', { name: 'Efek', exact: true }).getAttribute('aria-selected') === 'true', 'E opens the selected clip effect controls');
+  const reverb = page.getByRole('slider', { name: 'Reverb', exact: true });
+  await reverb.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight');
+  check(await reverb.inputValue() === '1', 'custom effect fader supports keyboard intensity changes');
+  await page.evaluate(async () => { const { editor } = await import(window.__kurTestModules.model); const { serializeProject, deserializeProject } = await import(window.__kurTestModules.storage); const p = editor.get().project; const result = await deserializeProject(serializeProject(p)); if (result.project.clips[0].effects?.reverb !== 1) throw Error('Effect roundtrip failed'); });
+  check(true, 'effect values survive project serialization with embedded media');
+  await page.getByRole('button', { name: 'Putar (Space)', exact: true }).click(); await page.getByRole('button', { name: 'Jeda (Space)', exact: true }).waitFor();
+  await reverb.focus(); await page.keyboard.press('ArrowRight');
+  check(await page.evaluate(async () => (await import(window.__kurTestModules.audio)).playback.playing), 'changing a live effect keeps playback running');
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await page.getByRole('switch', { name: 'Room', exact: true }).check();
+  const room = page.getByRole('slider', { name: 'Room', exact: true }); await room.focus(); await page.keyboard.press('ArrowRight');
+  await page.getByRole('button', { name: 'Hall', exact: true }).click();
+  check(await page.getByRole('button', { name: 'Hall', exact: true }).getAttribute('aria-pressed') === 'true', 'room size is independently selectable');
+  await page.getByRole('button', { name: 'Bypass efek', exact: true }).click();
+  check(await reverb.isDisabled(), 'bypass disables effect controls without erasing values');
+  await page.getByRole('button', { name: 'Bypass efek', exact: true }).click(); check(await reverb.inputValue() === '2', 'reactivating effects restores their stored strength');
+  await page.getByRole('switch', { name: 'Denoise', exact: true }).check();
+  const denoise = page.getByRole('slider', { name: 'Denoise', exact: true });
+  await denoise.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight');
+  await page.getByRole('button', { name: 'Putar (Space)', exact: true }).click();
+  await page.getByRole('button', { name: 'Jeda (Space)', exact: true }).waitFor(); await page.waitForTimeout(100);
+  await denoise.focus(); await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(async () => !(document.querySelector('.play-button').getAttribute('aria-busy') === 'true') && (await import(window.__kurTestModules.audio)).playback.playing);
+  check(await page.evaluate(async () => (await import(window.__kurTestModules.model)).editor.get().project.clips[0].effects.denoise === 2), 'denoise worker can refresh a playing clip after an intensity change');
+  await page.keyboard.press('End'); await page.getByRole('button', { name: 'Stop', exact: true }).click(); await page.waitForTimeout(250);
+  check(await page.evaluate(async () => !(await import(window.__kurTestModules.audio)).playback.playing), 'Stop cancels pending denoise preparation without restarting audio later');
+  await page.mouse.move(1000, 70); await page.screenshot({ path: 'test-results/editing-effects/effects.png' });
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  await fs.writeFile('test-results/editing-effects/axe.json', JSON.stringify(axe.violations, null, 2)); check(axe.violations.length === 0, 'effect controls have no automated WCAG A/AA violations');
+  const css = await page.evaluate(() => Array.from(document.styleSheets).flatMap(s => Array.from(s.cssRules).map(r => r.cssText)).join('\n'));
+  await fs.writeFile('test-results/editing-effects/harness.html', await page.evaluate(css => '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KurAudio effects controls</title><style>'+css+'</style></head><body>'+document.body.innerHTML.replace(/<script[\s\S]*?<\/script>/g, '')+'</body></html>', css));
+
+  const measurements = await page.evaluate(async () => {
+    const { renderProject, putMedia, audioContext, encodeFloatWav } = await import(window.__kurTestModules.audio); const { emptyProject, makeClip, defaultEffects } = await import(window.__kurTestModules.model);
+    const ctx = audioContext(), p = emptyProject();
+    const impulse = ctx.createBuffer(1, 4800, 48000); impulse.getChannelData(0)[960] = 0.8;
+    const a = putMedia(impulse, encodeFloatWav(impulse), 'impulse.wav'); p.assets = [a]; p.clips = [makeClip(a, p.tracks[0].id, 0)];
+    const dry = await renderProject(p), energy = (b, from = 0) => b.getChannelData(0).slice(Math.floor(from * b.sampleRate)).reduce((n, x) => n + x * x, 0);
+    const out = { dryLength: dry.length };
+    for (const name of ['reverb', 'room', 'echo']) { p.clips[0].effects = { ...defaultEffects(), [name]: 80 }; const wet = await renderProject(p); out[name] = { tail: energy(wet, 0.1), length: wet.length }; }
+    p.clips[0].effects = { ...defaultEffects(), bypassed: true, denoise: 90, reverb: 100, room: 100, echo: 100, bass: 12, treble: 12, compression: 100 }; const bypassed = await renderProject(p);
+    out.bypass = bypassed.length === dry.length && bypassed.getChannelData(0).every((x, i) => Math.abs(x - dry.getChannelData(0)[i]) < 1e-6);
+    for (const [name, hz] of [['bass', 80], ['treble', 8000], ['compression', 440]]) {
+      const b = ctx.createBuffer(1, 24000, 48000); for (let i = 0; i < b.length; i++) b.getChannelData(0)[i] = Math.sin(i * 2 * Math.PI * hz / 48000) * 0.8;
+      const asset = putMedia(b, encodeFloatWav(b), name + '.wav'); p.assets = [asset]; p.clips = [makeClip(asset, p.tracks[0].id, 0)]; const base = await renderProject(p);
+      p.clips[0].effects = { ...defaultEffects(), [name]: name === 'compression' ? 100 : 12 }; const effected = await renderProject(p); out[name] = energy(effected, 0.1) / energy(base, 0.1);
+    }
+    const noisy = ctx.createBuffer(1, 16000, 16000); let seed = 1;
+    for (let i = 0; i < noisy.length; i++) { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; noisy.getChannelData(0)[i] = seed / 2147483648 * 0.05 + (i > 4000 && i < 12000 ? Math.sin(i * Math.PI * 2 * 440 / 16000) * 0.4 : 0); }
+    const noisyAsset = putMedia(noisy, encodeFloatWav(noisy), 'noisy.wav'); p.assets = [noisyAsset]; p.clips = [makeClip(noisyAsset, p.tracks[0].id, 0)]; const baseNoise = await renderProject(p, 16000);
+    p.clips[0].effects = { ...defaultEffects(), denoise: 85 }; const cleaned = await renderProject(p, 16000);
+    const quiet = b => b.getChannelData(0).slice(1000, 3000).reduce((n, x) => n + x * x, 0); out.denoise = quiet(cleaned) / quiet(baseNoise);
+    return out;
+  });
+  await fs.writeFile('test-results/editing-effects/dsp.json', JSON.stringify(measurements, null, 2));
+  for (const name of ['reverb', 'room', 'echo']) check(measurements[name].tail > 1e-7 && measurements[name].length > measurements.dryLength, `${name} produces a measurable audible tail in the actual offline export`);
+  check(measurements.bypass, 'bypassed processing reproduces the dry signal and duration');
+  check(measurements.bass > 3 && measurements.treble > 3, 'bass and treble controls change their actual audio frequency bands');
+  check(measurements.compression < 0.5, 'compressor reduces the measured loud signal energy');
+  check(measurements.denoise < 0.5, 'worker denoise reduces measured quiet-section noise in the exported buffer');
+  check(errors.length === 0, 'editing and effect processing produce no runtime errors');
+  console.log(`RESULT: ${count} editing/effect checks passed`);
+} finally { await browser.close(); }

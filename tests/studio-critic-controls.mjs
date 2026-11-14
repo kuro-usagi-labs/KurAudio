@@ -1,0 +1,56 @@
+import {chromium} from 'playwright';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const out=path.resolve('test-results/studio/critic'),log=[],errors=[];
+const browser=await chromium.launch(),context=await browser.newContext({viewport:{width:1280,height:800},acceptDownloads:true,reducedMotion:'reduce'}),page=await context.newPage();
+page.on('pageerror',e=>errors.push(e.message));
+const button=name=>page.getByRole('button',{name,exact:true});
+const ui=()=>page.evaluate(()=>({heading:document.querySelector('[role=dialog] h2')?.textContent,time:document.querySelector('[aria-label="Waktu playhead"]')?.textContent,zoom:document.querySelector('.zoom-controls > span')?.textContent,assets:[...document.querySelectorAll('.asset-item')].map(x=>x.textContent),pressed:[...document.querySelectorAll('[aria-pressed=true]')].map(e=>e.getAttribute('aria-label')||e.textContent),focus:document.activeElement?.getAttribute('aria-label')||document.activeElement?.textContent?.slice(0,70),body:document.querySelector('[role=tabpanel]')?.textContent?.slice(0,500)}));
+const state=()=>page.evaluate(async()=>{const {editor}=await import(performance.getEntriesByType('resource').find(e=>new URL(e.name).pathname==='/src/model.ts').name);const s=editor.get();return{project:s.project,selected:s.selected,range:s.range,undo:s.undoCount,redo:s.redoCount};});
+async function act(name,fn){const a={ui:await ui(),state:await state().catch(()=>null)};try{await fn();await page.waitForTimeout(80);const b={ui:await ui(),state:await state().catch(()=>null)};log.push({name,changed:JSON.stringify(a)!==JSON.stringify(b),before:a,after:b});}catch(e){log.push({name,error:e.message.slice(0,1200)});}}
+const click=name=>act(name,()=>button(name).click({timeout:3000}));
+const edit=(name,value)=>act(name,async()=>{const e=page.getByLabel(name,{exact:true});await e.fill(String(value));await page.keyboard.press('Enter');});
+try{
+ await page.goto('http://127.0.0.1:1422');await button('Proyek baru').waitFor();
+ await act('Home: file chooser cancellation',async()=>{const chooser=page.waitForEvent('filechooser');await button('Buka dari berkas').click();await(await chooser).setFiles([]);});
+ await click('Proyek baru');
+ for(const name of ['Buka','Impor audio','Impor audio ke pustaka'])await act(name+' cancellation',async()=>{const chooser=page.waitForEvent('filechooser');await button(name).click();await(await chooser).setFiles([]);});
+ await click('Buka sesi demo');await page.getByTestId('audio-clip').first().waitFor();
+ await act('Simpan project download',async()=>{const d=page.waitForEvent('download');await button('Simpan').click();const download=await d;await download.saveAs(path.join(out,'critic-session.kura'));});
+ await edit('Nama proyek','Sesi kritik');await edit('Cari audio','ambient');await click('Hapus pencarian');
+ await click('Ke akhir (End)');await click('Ke awal (Home)');await click('Putar (Space)');await page.waitForTimeout(250);await click('Jeda (Space)');await click('Stop');
+ for(const name of ['Pilih & geser (V)','Alat potong (C)','Seleksi rentang (R)','Pilih & geser (V)','Snapping (N)','Snapping (N)','Ripple delete: tutup jeda saat hapus','Ripple delete: tutup jeda saat hapus','Perkecil timeline (-)','Perbesar timeline (+)','Sesuaikan timeline (F)','Tampilkan media','Tampilkan media','Properti','Properti'])await click(name);
+ for(const track of ['Voice over','Musik','Efek suara']){await click('Mute '+track);await click('Mute '+track);await click('Solo '+track);await click('Solo '+track);await act('Volume '+track,()=>page.getByRole('slider',{name:'Volume '+track,exact:true}).fill('-6'));}
+ await edit('Nama track 1','Narasi');await click('Tambah track');
+ await page.getByTestId('audio-clip').first().click({position:{x:30,y:45}});await click('Duplikat (Ctrl+D)');await click('Undo (Ctrl+Z)');await click('Redo (Ctrl+Shift+Z)');await page.getByTestId('audio-clip').first().click({position:{x:30,y:45}});await click('Hapus (Delete)');await click('Undo (Ctrl+Z)');await click('Undo (Ctrl+Z)');
+ await page.getByTestId('audio-clip').first().click({position:{x:30,y:45}});
+ await edit('Nama klip','Klip uji dengan nama panjang untuk inspeksi');await edit('Mulai di timeline',2);await edit('Offset sumber',0);await edit('Durasi',6);await edit('Gain klip',-3);
+ for(const name of ['-12','-6','0','+6','Ke awal klip','Terapkan fade lembut'])await click(name);
+ await edit('Fade in',.2);await edit('Fade out',.4);
+ await act('Efek tab via ArrowRight',async()=>{await page.getByRole('tab',{name:'Properti',exact:true}).focus();await page.keyboard.press('ArrowRight');});
+ while(await page.locator('.effect-section-heading[aria-expanded=false]').count())await page.locator('.effect-section-heading[aria-expanded=false]').first().click();
+ for(const [name,value]of[['Denoise',10],['Reverb',20],['Decay',2],['Room',20],['Echo',10],['Jeda echo',.4],['Bass',2],['Treble',-2],['Compressor',20]])await act(name+' slider',()=>page.getByRole('slider',{name,exact:true}).fill(String(value)));
+ for(const name of ['Kecil','Studio','Hall','Aktifkan efek','Aktifkan efek','Reset efek'])await click(name);
+ await act('Preset drawer',()=>page.getByRole('button',{name:/Preset pribadi/}).click());await edit('Nama preset','Kritik');await click('Simpan preset');await click('Kritik');await click('Hapus preset Kritik');
+ await click('Marker (M)');await click('Loop (L)');await click('Loop (L)');await click('Alat audio');await click('Tambah di playhead');await edit('Nama Marker 2','Bagian dua');await edit('Waktu Bagian dua',3);await click('Ke marker Bagian dua');await click('Hapus marker Bagian dua');await act('Loop nonaktif toggle',()=>page.getByRole('button',{name:/^Loop nonaktif/}).click());await edit('Mulai loop',1);await edit('Selesai loop',4);await act('Loop aktif toggle',()=>page.getByRole('button',{name:/^Loop aktif/}).click());
+ await act('Alat tabs arrow switch',async()=>{await page.getByRole('tab',{name:'Marker & loop',exact:true}).focus();await page.keyboard.press('ArrowRight');});
+ for(const [name,value]of[['Batas hening',-35],['Hening minimum',.4],['Jeda disisakan',.1]])await act(name,()=>page.getByRole('slider',{name,exact:true}).fill(String(value)));
+ await act('Tutup celah checkbox',()=>page.getByRole('checkbox',{name:'Tutup celah setelah dipangkas',exact:true}).uncheck());await click('Analisis hening');await page.waitForTimeout(400);
+ await act('Rekam tab preflight only',()=>page.getByRole('tab',{name:'Rekam',exact:true}).click());await act('Default microphone radio',()=>page.getByRole('radio',{name:'Mikrofon default',exact:true}).click());
+ await act('Alat dialog trap 24 tabs',async()=>{const a=[];for(let i=0;i<24;i++){await page.keyboard.press('Tab');a.push(await page.evaluate(()=>!!document.activeElement.closest('[role=dialog]')));}if(a.some(v=>!v))throw Error('Focus left dialog');});await page.keyboard.press('Escape');
+ await click('Shortcut');await act('Close help by X',()=>page.locator('[role=dialog] button[aria-label]').first().click());await click('Rekam mikrofon');await page.keyboard.press('Escape');
+ await click('Ekspor audio');
+ for(const name of ['Klip terpilih','Seluruh proyek','44.1 kHz','48 kHz','16-bit','24-bit','MP3','128 kbps','192 kbps','256 kbps','320 kbps','WAV'])await click(name);
+ await act('Normalize checkbox',()=>page.getByRole('checkbox',{name:'Normalisasi peak ke −1 dBFS',exact:true}).uncheck());await act('Normalize checkbox restore',()=>page.getByRole('checkbox',{name:'Normalisasi peak ke −1 dBFS',exact:true}).check());await click('Klip terpilih');await edit('Nama berkas ekspor','critic-selected');
+ await act('Export real selected WAV',async()=>{const d=page.waitForEvent('download');await button('Ekspor WAV').click();await(await d).saveAs(path.join(out,'critic-selected.wav'));});
+ await click('Ekspor audio');await click('MP3');await click('Klip terpilih');await act('Export real selected MP3',async()=>{const d=page.waitForEvent('download');await button('Ekspor MP3').click();await(await d).saveAs(path.join(out,'critic-selected.mp3'));});
+ await click('Pilih & geser (V)');await page.getByTestId('audio-clip').first().click({position:{x:30,y:45}});await click('Ke awal (Home)');
+ await act('Seek to three seconds by keyboard',async()=>{await page.getByRole('slider',{name:'Posisi playhead',exact:true}).focus();for(let i=0;i<30;i++)await page.keyboard.press('ArrowRight');});await click('Potong');
+ await act('Select split pair',async()=>{const clips=page.locator('.audio-clip[aria-label^="Klip uji"]');await clips.first().click({position:{x:15,y:45}});await clips.nth(1).click({position:{x:15,y:45},modifiers:['Shift']});});await click('Sambungkan (Ctrl+J)');await page.waitForTimeout(200);await click('Undo (Ctrl+Z)');
+ await page.locator('.audio-clip[aria-label^="Klip uji"]').nth(1).click({position:{x:15,y:45}});await page.getByRole('tab',{name:'Properti',exact:true}).click();await edit('Mulai di timeline',2.5);
+ await act('Select overlapping pair',async()=>{const clips=page.locator('.audio-clip[aria-label^="Klip uji"]');await clips.first().click({position:{x:15,y:45}});await clips.nth(1).click({position:{x:15,y:45},modifiers:['Shift']});});await click('Buat crossfade');
+ await click('Seleksi rentang (R)');await act('Create visible time range',async()=>{const b=await page.getByTestId('lane-0').boundingBox();await page.mouse.move(b.x+70,b.y+55);await page.mouse.down();await page.mouse.move(b.x+150,b.y+55,{steps:6});await page.mouse.up();});
+ await edit('Awal rentang',1);await edit('Akhir rentang',3);await click('Ekspor rentang');await click('Rentang');await click('Batal');await click('Pisahkan rentang');await click('Undo (Ctrl+Z)');
+ await click('Seleksi rentang (R)');await act('Restore visible range',async()=>{const b=await page.getByTestId('lane-0').boundingBox();await page.mouse.move(b.x+70,b.y+55);await page.mouse.down();await page.mouse.move(b.x+150,b.y+55,{steps:6});await page.mouse.up();});await click('Hapus rentang');await click('Undo (Ctrl+Z)');
+ await click('Baru');await click('Batal');await click('Beranda');await click('Lanjut tanpa simpan');
+}finally{await fs.writeFile(path.join(out,'control-sweep.json'),JSON.stringify({log,errors},null,2));await browser.close();console.log(JSON.stringify({actions:log.length,errors,failedActions:log.filter(x=>x.error).map(x=>({name:x.name,error:x.error})),unchanged:log.filter(x=>x.changed===false).map(x=>x.name)},null,2));}

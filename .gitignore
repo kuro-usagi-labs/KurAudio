@@ -1,0 +1,52 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.tsbuildinfo
+/release/
+/third-party/relink/
+/third-party/lamejs/source/
+
+# Test output, recordings and local projects
+/test-results/
+/playwright-report/
+/blob-report/
+*.log
+*.kura
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.wma
+*.aiff
+*.aif
+
+# Credentials and machine-specific files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Working notes and local build helpers
+.superpowers/
+/docs/*
+!/docs/GUIDE.md
+!/docs/PUBLISHING.md
+!/docs/RELEASE-0.11.0.md
+!/docs/AUDIT-0.11.0.md
+!/docs/AUDIT-INTERFACE-2026-10-30.md
+!/docs/images/
+/scripts/build-env.ps1

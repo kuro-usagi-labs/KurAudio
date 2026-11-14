@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "KurAudio",
+  "version": "0.11.0",
+  "identifier": "id.kuraudio.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1422",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "KurAudio",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 620,
+        "backgroundColor": "#1b1c20",
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost; font-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "resources": {
+      "../third-party/lamejs/SOURCE.txt": "third-party/lamejs/SOURCE.txt",
+      "../third-party/lamejs/LICENSE-upstream.txt": "third-party/lamejs/LICENSE-upstream.txt",
+      "../third-party/lamejs/LGPL-3.0.txt": "third-party/lamejs/LGPL-3.0.txt",
+      "../third-party/lamejs/GPL-3.0.txt": "third-party/lamejs/GPL-3.0.txt",
+      "../third-party/lamejs/lamejs.js": "third-party/lamejs/lamejs.js",
+      "../third-party/lamejs/upstream-source-1.2.7.zip": "third-party/lamejs/upstream-source-1.2.7.zip",
+      "../third-party/relink/KurAudio-source.zip": "third-party/relink/KurAudio-source.zip"
+    },
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Editor audio dengan timeline multi-track",
+    "category": "Music",
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

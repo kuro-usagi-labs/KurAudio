@@ -1,0 +1,31 @@
+.timeline .audio-clip { height:calc(var(--layout-track) - 1rem); }
+.timeline .crossfade-overlay { height:calc(var(--layout-track) - 2.75rem); }
+.clip-menu { position:fixed; z-index:60; display:flex; flex-direction:column; width:min(17rem,calc(100vw - 1rem)); max-height:calc(100dvh - 1rem); overflow:auto; padding:var(--size-xs); border:0.0625rem solid var(--border-strong); border-radius:var(--radius-medium); background:var(--surface-card); color:var(--text-primary); box-shadow:var(--shadow-floating); }
+.clip-menu button { width:100%; min-height:2.125rem; justify-content:space-between; gap:var(--size-lg); padding:var(--size-sm) var(--size-md); font-size:0.75rem; text-align:left; flex-shrink:0; }
+.clip-menu button:focus-visible { outline:none; background:var(--surface-selection); color:var(--text-primary); box-shadow:inset 0 0 0 var(--outline-width) var(--action-primary); }
+.clip-menu .clip-menu-destructive { color:var(--action-destructive); }
+.clip-menu-shortcut { color:var(--text-tertiary); font:0.625rem var(--font-mono); white-space:nowrap; }
+.clip-fade-controls { position:absolute; inset:0; z-index:4; container-type:inline-size; pointer-events:none; }
+.audio-clip .fade-handle { position:absolute; display:none; width:1.5rem; height:1.5rem; min-height:1.5rem; padding:0; border:0; background:transparent; color:var(--track-color); cursor:ew-resize; touch-action:none; opacity:0; pointer-events:auto; scale:1; transition:opacity var(--duration-fast) var(--ease-out); }
+.audio-clip .fade-handle:active { scale:1; }
+.fade-handle-in { top:0.875rem; left:clamp(1.5rem,var(--fade-position),calc(100% - 1.5rem)); transform:translateX(-50%); }
+.fade-handle-out { bottom:0; right:clamp(1.5rem,var(--fade-position),calc(100% - 1.5rem)); transform:translateX(50%); }
+.fade-handle::before { content:''; width:0.625rem; height:0.625rem; border:0.0625rem solid currentColor; border-radius:0.125rem; background:var(--surface-input); pointer-events:none; }
+.fade-handle::after { content:''; position:absolute; top:50%; left:50%; width:0.1875rem; height:0.1875rem; border-left:0.0625rem solid currentColor; border-top:0.0625rem solid currentColor; transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; }
+.fade-handle-out::after { transform:translate(-50%,-50%) rotate(-135deg); }
+.audio-clip:is(:hover,:focus-within,.is-selected,.is-fading) .fade-handle { opacity:1; }
+.audio-clip .fade-handle:is(:hover,:focus-visible,[data-timeline-gesture])::before { background:var(--track-color); }
+.audio-clip .fade-handle:is(:hover,:focus-visible,[data-timeline-gesture])::after { color:var(--surface-input); }
+.audio-clip.is-fading { overflow:hidden; }
+@container (min-width:3.5rem) { .audio-clip .fade-handle { display:inline-flex; } }
+/* Keep the three audio handles in separate vertical bands, even at the minimum track height. */
+.timeline .crossfade-handle { top:0.8125rem; bottom:auto; height:1.5rem; }
+.selection-marquee { position:absolute; z-index:12; border:1px solid var(--action-primary); background:color-mix(in srgb,var(--action-primary) 12%,transparent); pointer-events:none; }
+.timeline-overlay-host[inert] { pointer-events:none; }
+.timeline-overlay-host[inert] .crossfade-handle,.timeline-overlay-host[inert] .range-move { pointer-events:none; }
+.clip-status { display:inline-flex; flex-shrink:0; align-items:center; gap:2px; margin-left:auto; color:var(--text-secondary); }
+.audio-clip.is-locked { cursor:default; border-style:dashed; }
+.audio-clip.is-grouped { border-bottom-width:2px; }
+.track-lock.tiny-button { min-width:1.5rem; }
+.timeline[data-tool="gain"] .audio-clip { cursor:crosshair; }
+.timeline .track-lane { touch-action:none; }

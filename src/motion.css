@@ -1,0 +1,71 @@
+/* macOS-inspired feedback, expressed through KurAudio's own motion tokens. */
+button {
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), scale var(--duration-settle) var(--ease-spring);
+  scale: 1;
+}
+button:active:not(:disabled) { scale: var(--motion-press-scale); transition-duration: var(--duration-press); }
+button:disabled { scale: 1; }
+.transport-glyph { display: flex; animation: glyph-arrive var(--duration-normal) var(--ease-spring); }
+@keyframes glyph-arrive { from { opacity: 0; scale: var(--motion-icon-scale); } to { opacity: 1; scale: 1; } }
+
+.checkbox-box { transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), scale var(--duration-settle) var(--ease-spring); }
+.checkbox-box svg { scale: var(--motion-check-scale); rotate: var(--motion-check-turn); transition: opacity var(--duration-fast) var(--ease-out), scale var(--duration-normal) var(--ease-spring), rotate var(--duration-normal) var(--ease-spring); }
+.checkbox-control input:checked + .checkbox-box svg { scale: 1; rotate: 0deg; }
+.checkbox-control:has(input:active:not(:disabled)) .checkbox-box { scale: var(--motion-press-scale); }
+.fader-thumb { transition: scale var(--duration-settle) var(--ease-spring), background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out); }
+.track-fader:has(input:active:not(:disabled)) .fader-thumb { scale: 1 var(--motion-fader-scale); }
+/* Gain and clip geometry have no tween: the pointer always stays authoritative. */
+.audio-clip { transition: border-color var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out); animation: clip-arrive var(--duration-normal) var(--ease-out); }
+.asset-item,.track-header { transition: background var(--duration-fast) var(--ease-out); }
+.trim-handle { transition: opacity var(--duration-fast) var(--ease-out); }
+@keyframes clip-arrive { from { opacity: 0; } }
+
+.segmented { position: relative; isolation: isolate; }
+.segmented button { position: relative; background: transparent; color:var(--text-secondary); }
+.segmented button:hover { background: var(--surface-raised); color:var(--text-primary); }
+.export-settings .segmented button[aria-pressed="true"] { background: var(--surface-hover); border-color:var(--border-strong); color:var(--text-primary); box-shadow:var(--shadow-control); }
+.effect-section-heading, .effect-section-icon { transition:background-color var(--duration-fast), color var(--duration-fast); }
+@keyframes effect-reveal { from {opacity:0;} to {opacity:1;} }
+
+.motion-presence { display: contents; }
+.modal-backdrop,.busy-overlay { opacity: 1; transition: opacity var(--duration-normal) var(--ease-out); }
+.modal,.busy-card { opacity: 1; translate: 0 0; scale: 1; transition: opacity var(--duration-normal) var(--ease-out), translate var(--duration-settle) var(--ease-out), scale var(--duration-settle) var(--ease-out); }
+.motion-presence[data-state=entering] > :is(.modal-backdrop,.busy-overlay),.motion-presence[data-state=exiting] > :is(.modal-backdrop,.busy-overlay) { opacity: 0; }
+.motion-presence[data-state=entering] :is(.modal,.busy-card),.motion-presence[data-state=exiting] :is(.modal,.busy-card) { opacity: 0; translate: 0 var(--motion-surface-offset); scale: var(--motion-surface-scale); }
+.motion-presence[data-state=exiting] > :is(.modal-backdrop,.busy-overlay),.motion-presence[data-state=exiting] :is(.modal,.busy-card) { transition-duration: var(--duration-exit); transition-timing-function: var(--ease-in); pointer-events: none; }
+.toast { opacity: 1; translate: 0 0; scale: 1; transform-origin: bottom center; transition: opacity var(--duration-fast) var(--ease-out), translate var(--duration-settle) var(--ease-out), scale var(--duration-settle) var(--ease-spring); }
+.motion-presence[data-state=entering] > .toast,.motion-presence[data-state=exiting] > .toast { opacity: 0; translate: 0 var(--motion-surface-offset); scale: var(--motion-surface-scale); }
+.motion-presence[data-state=exiting] > .toast { transition-duration: var(--duration-exit); transition-timing-function: var(--ease-in); pointer-events: none; }
+.custom-tooltip { animation: tooltip-arrive var(--duration-fast) var(--ease-out); }
+@keyframes tooltip-arrive { from { opacity: 0; translate: 0 var(--size-xs); } to { opacity: 1; translate: 0 0; } }
+
+/* The grid moves only during a panel toggle, never during a timeline gesture. */
+@media (min-width: 900px) {
+  .editor-body { transition: grid-template-columns var(--duration-settle) var(--ease-out); }
+  .media-panel { min-width: 0; opacity: 1; translate: 0 0; visibility: visible; transition: opacity var(--duration-normal) var(--ease-out), translate var(--duration-settle) var(--ease-out), visibility var(--duration-instant); }
+  .hide-media .media-panel { display: flex; opacity: 0; translate: calc(-1 * var(--motion-panel-offset)) 0; visibility: hidden; transition: opacity var(--duration-exit) var(--ease-in), translate var(--duration-settle) var(--ease-out), visibility var(--duration-instant) var(--duration-settle); }
+  .media-panel > * { width: var(--layout-media); flex-shrink: 0; }
+  .media-panel > .media-search { width: calc(var(--layout-media) - 1.25rem); }
+  .asset-list { flex-shrink: 1; }
+}
+@media (min-width: 1200px) {
+  .inspector { min-width: 0; opacity: 1; translate: 0 0; visibility: visible; transition: opacity var(--duration-normal) var(--ease-out), translate var(--duration-settle) var(--ease-out), visibility var(--duration-instant); }
+  .hide-inspector .inspector { display: flex; opacity: 0; translate: var(--motion-panel-offset) 0; visibility: hidden; transition: opacity var(--duration-exit) var(--ease-in), translate var(--duration-settle) var(--ease-out), visibility var(--duration-instant) var(--duration-settle); }
+  .inspector > * { width: var(--layout-inspector); flex-shrink: 0; }
+  .inspector-content { flex-shrink: 1; }
+}
+@media (max-width: 1199px) {
+  .show-properties .inspector { animation: panel-arrive var(--duration-normal) var(--ease-out); }
+}
+@media (max-width: 899px) {
+  .show-media .media-panel { animation: panel-arrive var(--duration-normal) var(--ease-out); }
+}
+@keyframes panel-arrive { from { opacity: 0; translate: var(--motion-panel-offset) 0; } to { opacity: 1; translate: 0 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  button:active:not(:disabled),.checkbox-control:has(input:active:not(:disabled)) .checkbox-box,.track-fader:has(input:active:not(:disabled)) .fader-thumb { scale: 1; }
+  .motion-presence[data-state=entering] :is(.modal-backdrop,.busy-overlay,.modal,.busy-card,.toast) { opacity: 1; translate: 0 0; scale: 1; }
+}
+.home-main { animation: home-arrive var(--duration-settle) var(--ease-out) both; }
+@keyframes home-arrive { from { opacity: 0; transform: translateY(var(--motion-surface-offset)); } to { opacity: 1; transform: none; } }

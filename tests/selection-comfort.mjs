@@ -1,0 +1,9 @@
+import {createServer} from 'vite';
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+const server=await createServer({server:{port:1478,host:'127.0.0.1'},clearScreen:false});await server.listen();const browser=await chromium.launch();
+try{const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto('http://127.0.0.1:1478');await page.getByRole('button',{name:'Proyek baru',exact:true}).click();await page.getByRole('button',{name:'Buka sesi demo',exact:true}).click();const clip=page.getByTestId('audio-clip').first();await clip.waitFor();await page.waitForTimeout(400);const b=await clip.boundingBox(),x=b.x+b.width/2,y=b.y+60;
+await page.getByRole('button',{name:'Putar (Space)',exact:true}).click();await page.getByRole('button',{name:'Jeda (Space)',exact:true}).waitFor();await page.mouse.click(x,y);assert.equal(await page.getByRole('button',{name:'Jeda (Space)',exact:true}).count(),1);console.log('PASS selecting a clip preserves playback');
+await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+2,y+1);assert.equal(await clip.evaluate(el=>el.classList.contains('dragging')),false);await page.mouse.up();assert.equal((await clip.boundingBox()).x,b.x);console.log('PASS pointer jitter neither starts drag nor moves audio');
+await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+60,y,{steps:8});assert.equal(await clip.evaluate(el=>el.classList.contains('dragging')),true);assert.equal(await page.getByRole('button',{name:'Putar (Space)',exact:true}).count(),1);await page.keyboard.press('Escape');await page.mouse.up();assert.equal((await clip.boundingBox()).x,b.x);console.log('PASS intentional drag pauses playback and Escape restores position');
+}finally{await browser.close();await server.close();}

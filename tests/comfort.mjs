@@ -1,0 +1,78 @@
+import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const folder = path.resolve('test-results/comfort/integration'); await fs.mkdir(folder, { recursive: true });
+const browser = await chromium.launch(), results = [], errors = [];
+const check = (ok, label) => { assert.ok(ok, label); results.push(label); console.log('PASS ' + label); };
+const pause = ms => new Promise(r => setTimeout(r, ms));
+async function snapshot(page, name) {
+  await page.mouse.move(0, 0); await page.screenshot({ path: path.join(folder, name + '.png') });
+  const html = await page.evaluate(() => { const doc = document.documentElement.cloneNode(true); doc.querySelectorAll('script,link[rel=stylesheet]').forEach(n => n.remove()); const style = document.createElement('style'); style.textContent = [...document.styleSheets].flatMap(s => [...s.cssRules].map(r => r.cssText)).join('\n') + '\n*{animation:none!important;transition:none!important}'; doc.querySelector('head').append(style); return '<!doctype html>' + doc.outerHTML; });
+  await fs.writeFile(path.join(folder, name + '.html'), html);
+}
+try {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, reducedMotion: 'reduce' });
+  const page = await context.newPage(); page.setDefaultTimeout(8000); page.on('pageerror', error => errors.push(String(error))); await page.goto('http://127.0.0.1:1422');
+  await page.getByRole('button', { name: 'Proyek baru', exact: true }).click(); await page.getByRole('button', { name: 'Buka sesi demo', exact: true }).click();
+  await page.evaluate(() => { window.mods = Object.fromEntries(['model', 'audio', 'mediaPreview', 'workspace'].map(k => [k, performance.getEntriesByType('resource').find(e => new URL(e.name).pathname === '/src/' + k + '.ts').name])); });
+  const state = () => page.evaluate(async () => (await import(window.mods.model)).editor.get());
+  const audioState = () => page.evaluate(async () => { const a = await import(window.mods.audio), p = await import(window.mods.mediaPreview); return { preview: p.mediaPreview.get(), playing: a.playback.playing, time: a.playback.position }; });
+  const head = () => page.getByRole('slider', { name: 'Posisi playhead', exact: true });
+  const initial = await state();
+  await page.locator('.asset-preview-button').first().click(); await pause(120);
+  check((await audioState()).preview.playing && !(await audioState()).playing, 'media auditions independently of timeline playback');
+  await page.getByRole('slider', { name: 'Volume pratinjau', exact: true }).focus(); await page.keyboard.press('Home');
+  await page.getByRole('slider', { name: 'Posisi pratinjau', exact: true }).focus(); await page.keyboard.press('ArrowRight');
+  check((await audioState()).preview.volume === 0 && (await state()).undoCount === initial.undoCount && JSON.stringify((await state()).project) === JSON.stringify(initial.project), 'preview seek and volume do not alter audio clips or Undo history');
+  await page.getByRole('button', { name: 'Jeda pratinjau', exact: true }).click(); await snapshot(page, 'workspace');
+  await page.getByRole('button', { name: 'Putar (Space)', exact: true }).click(); await pause(90);
+  check((await audioState()).playing && !(await audioState()).preview.playing, 'timeline playback stops source audition');
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await page.evaluate(async () => { const {editor} = await import(window.mods.model), p = editor.get().project; editor.select([p.clips[0].id]); editor.setRange({ start: 2, end: 2.25, trackIds: [p.tracks[0].id] }); });
+  await page.locator('.asset-item').first().focus(); await page.keyboard.press('Shift+Space'); await pause(500);
+  check(!(await audioState()).playing && Math.abs(Number(await head().getAttribute('aria-valuenow')) - 2.25) < .015, 'Shift+Space reviews the exact range once from a focused media row');
+  const clipsBeforeReturn = (await state()).project.clips.length; await page.keyboard.press('Shift+Enter');
+  check(Math.abs(Number(await head().getAttribute('aria-valuenow')) - 2) < .015 && (await state()).project.clips.length === clipsBeforeReturn, 'Shift+Enter returns to the review start without inserting media');
+  await page.getByRole('button', { name: 'Dengar ulang', exact: true }).click(); await snapshot(page, 'review-menu');
+  let axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); check(axe.violations.length === 0, 'review menu has no automated WCAG A/AA violations'); await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Tampilan workspace', exact: true }).click(); await page.getByRole('checkbox', { name: 'Ikuti playhead saat playback', exact: true }).uncheck();
+  await snapshot(page, 'workspace-settings'); axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze(); check(axe.violations.length === 0, 'workspace settings have no automated WCAG A/AA violations'); await page.keyboard.press('Escape');
+  await page.evaluate(async () => { const {editor} = await import(window.mods.model); editor.setRange(null); editor.select([]); });
+  await head().focus(); await page.keyboard.press('Home'); await page.keyboard.press('Space');
+  await page.locator('.timeline-scroll').evaluate(el => el.scrollLeft = 160); await pause(400);
+  check(await page.locator('.timeline-scroll').evaluate(el => el.scrollLeft) === 160, 'disabled follow preserves manual viewport while playback continues');
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await page.getByRole('separator', { name: 'Ubah lebar Media', exact: true }).focus(); await page.keyboard.press('ArrowRight');
+  await page.getByRole('button', { name: 'Tampilan workspace', exact: true }).click(); await page.getByRole('slider', { name: 'Tinggi track', exact: true }).focus(); await page.keyboard.press('End'); await page.keyboard.press('Escape');
+  check(Math.abs(await page.locator('.track-row').first().evaluate(el => el.getBoundingClientRect().height) - 240) < .1 && (await state()).undoCount === initial.undoCount, 'track and panel resizing leave the project history unchanged');
+  await page.evaluate(async () => { const {editor} = await import(window.mods.model); editor.setRange({ start: 10, end: 12, trackIds: [editor.get().project.tracks[0].id] }); });
+  await page.locator('.main-editor h1').focus(); await page.keyboard.press('Shift+f'); await pause(100);
+  const fittedZoom=await page.locator('.zoom-controls span').textContent(); check(await page.locator('.timeline-scroll').evaluate(el => el.scrollLeft) > 1000 && parseInt(fittedZoom)>500 && parseInt(fittedZoom)<=2000, 'Shift+F frames the selected range using the expanded zoom range');
+  await page.getByRole('button', { name: 'Ekspor rentang', exact: true }).click(); await page.getByLabel('Nama berkas ekspor', { exact: true }).fill('Review:final.wav.mp3');
+  const summary = page.getByRole('status', { name: 'Ringkasan ekspor', exact: true });
+  check((await summary.innerText()).includes('Review_final.wav') && (await summary.innerText()).includes('00:02'), 'export summary shows the sanitized actual filename and range duration');
+  await snapshot(page, 'export-summary'); const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: 'Ekspor WAV', exact: true }).click(); const download = await downloaded;
+  const bytes = await fs.readFile(await download.path()); const duration = await page.evaluate(async data => { const {audioContext} = await import(window.mods.audio); return (await audioContext().decodeAudioData(new Uint8Array(data).buffer)).duration; }, [...bytes]);
+  check(download.suggestedFilename() === 'Review_final.wav' && Math.abs(duration - 2) < .001, 'actual exported WAV agrees with summary filename and duration');
+  check((await page.getByLabel('Status berkas proyek', { exact: true }).innerText()).includes('belum disimpan'), 'audio export does not falsely mark the project file saved');
+  const saved = page.waitForEvent('download'); await page.getByRole('button', { name: 'Simpan', exact: true }).click(); const projectDownload = await saved; const projectFile = await fs.readFile(await projectDownload.path());
+  check((await page.getByLabel('Status berkas proyek', { exact: true }).innerText()).includes('unduhan dibuat'), 'browser project save reports a download separately from recovery');
+  await page.waitForTimeout(350); await page.getByRole('button', { name: 'Beranda KurAudio', exact: true }).click(); await page.locator('.recent-project-open').waitFor();
+  await snapshot(page, 'recent-projects'); check(await page.locator('.recent-project-open').count() === 1, 'successful explicit project save adds one genuine recent project');
+  await page.locator('.recent-project-open').first().click(); await page.waitForFunction(() => document.querySelector('.workspace')?.dataset.restoring === 'false');
+  check((await page.getByLabel('Status berkas proyek', { exact: true }).innerText()).includes('dibuka') && (await state()).project.id === initial.project.id, 'browser recent project reopens its full audio snapshot and reports opened file');
+  check(await page.locator('.track-row').first().evaluate(el => el.getBoundingClientRect().height) === 240 && await page.locator('.zoom-controls span').textContent() === fittedZoom, 'recent reopen restores project-specific track height and zoom');
+  check(await page.locator('[title]').count() === 0, 'new controls use custom tooltips without native browser tooltip painting');
+  for (const width of [900, 390, 320]) {
+    await page.setViewportSize({width, height: width === 900 ? 620 : 900});
+    await page.getByRole('button', { name: 'Tampilan workspace', exact: true }).scrollIntoViewIfNeeded(); await page.getByRole('button', { name: 'Tampilan workspace', exact: true }).click();
+    const bounds = await page.getByRole('dialog', { name: 'Tampilan workspace', exact: true }).boundingBox();
+    check(bounds.x >= 0 && bounds.x + bounds.width <= width && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `workspace popover remains accessible at ${width}px`);
+    await snapshot(page, 'settings-' + width); await page.keyboard.press('Escape');
+  }
+  check(errors.length === 0, 'comfort workflows produce no renderer exceptions');
+  await fs.writeFile(path.join(folder, 'results.json'), JSON.stringify({checks: results.length, results, errors, wavDuration: duration, projectBytes: projectFile.length}, null, 2));
+  console.log(`RESULT: ${results.length} comfort checks passed`);
+} finally { await browser.close(); }

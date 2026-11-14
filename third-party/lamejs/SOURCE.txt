@@ -1,0 +1,18 @@
+MP3 encoding uses @breezystack/lamejs 1.2.7 (unmodified), LGPL-3.0.
+LAME project: https://lame.sourceforge.net/
+Upstream: https://github.com/gideonstele/lamejs
+Exact npm gitHead: 1fb0ef5fa177413107e2e107d054a9b994e3f79c
+The upstream source archive, unmodified distributed JS, upstream notice, LGPL-3.0
+and GPL-3.0 texts accompany this application in third-party/lamejs.
+
+KurAudio application source and build files accompany the release in
+third-party/relink/KurAudio-source.zip. Extract it, run npm ci, replace
+@breezystack/lamejs with a compatible modified version, run npm run package:source,
+then build with Rust/MSVC and npm run tauri -- build --bundles nsis -- --jobs 2.
+See README.md for the required Windows toolchain.
+
+Permission is granted to use the accompanying KurAudio application code to
+recombine/relink it with a modified version of the LGPL-covered library and run
+that modified application for your own use. Reverse engineering for debugging
+such library modifications is permitted. There is no publisher signature or
+signature check preventing execution of such a rebuilt application.
