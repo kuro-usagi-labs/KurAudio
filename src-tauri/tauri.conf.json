@@ -38,7 +38,8 @@
       "../third-party/lamejs/GPL-3.0.txt": "third-party/lamejs/GPL-3.0.txt",
       "../third-party/lamejs/lamejs.js": "third-party/lamejs/lamejs.js",
       "../third-party/lamejs/upstream-source-1.2.7.zip": "third-party/lamejs/upstream-source-1.2.7.zip",
-      "../third-party/relink/KurAudio-source.zip": "third-party/relink/KurAudio-source.zip"
+      "../third-party/relink/KurAudio-source.zip": "third-party/relink/KurAudio-source.zip",
+      "../LICENSE": "LICENSE"
     },
     "icon": [
       "icons/icon.ico"
@@ -50,6 +51,8 @@
         "displayLanguageSelector": false,
         "installMode": "currentUser"
       }
-    }
+    },
+    "license": "MIT",
+    "licenseFile": "../LICENSE"
   }
 }

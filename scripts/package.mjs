@@ -1,9 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 const root=path.resolve('.'),version=JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8')).version,release=path.join(root,'release'),portable=path.join(release,`KurAudio-${version}-windows`);
 await fs.mkdir(portable,{recursive:true});
 await fs.copyFile(path.join(root,'src-tauri/target/release/kuraudio.exe'),path.join(portable,'KurAudio.exe'));
+await fs.copyFile(path.join(root,'LICENSE'),path.join(portable,'LICENSE'));
 await fs.copyFile(path.join(root,'docs',`AUDIT-${version}.md`),path.join(portable,'AUDIT.md'));
 await fs.copyFile(path.join(root,'docs','AUDIT-INTERFACE-2026-10-30.md'),path.join(portable,'INTERFACE.md'));
 await fs.copyFile(path.join(root,`src-tauri/target/release/bundle/nsis/KurAudio_${version}_x64-setup.exe`),path.join(release,`KurAudio-${version}-x64-setup.exe`));
@@ -62,6 +65,7 @@ format v4 dan memerlukan KurAudio 0.9 atau lebih baru; proyek lainnya tetap v3.
 Preset pribadi tersimpan di komputer ini; simpan .kura untuk arsip proyek.
 Semua audio diproses lokal. Rilis ini belum ditandatangani sertifikat penerbit.
 
+KurAudio: MIT License. Lihat LICENSE.
 Encoder MP3: LAME / @breezystack/lamejs, LGPL-3.0.
 Lisensi, sumber library, serta kode aplikasi untuk membangun ulang tersedia
 di folder third-party. Lihat THIRD-PARTY.txt dan third-party/lamejs/SOURCE.txt.
@@ -82,3 +86,15 @@ for(const index of await fs.readdir(registry))for(const pkg of ['symphonia-0.5.5
 }
 await fs.writeFile(path.join(portable,'THIRD-PARTY.txt'),notices,'utf8');
 for(const file of [path.join(portable,'KurAudio.exe'),path.join(release,`KurAudio-${version}-x64-setup.exe`)])console.log(`${file} | ${((await fs.stat(file)).size/1048576).toFixed(2)} MiB`);
+
+const portableZip = path.join(release, `KurAudio-${version}-windows.zip`);
+const quote = value => "'" + value.replaceAll("'", "''") + "'";
+await fs.rm(portableZip, { force: true });
+execFileSync('powershell.exe', ['-NoProfile', '-Command', `Add-Type -AssemblyName System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::CreateFromDirectory(${quote(portable)}, ${quote(portableZip)})`], { windowsHide: true, stdio: 'inherit' });
+const artifacts = [`KurAudio-${version}-x64-setup.exe`, `KurAudio-${version}-windows.zip`, `KurAudio-${version}-source.zip`];
+const checksums = [];
+for (const name of artifacts) checksums.push(`${createHash('sha256').update(await fs.readFile(path.join(release, name))).digest('hex')}  ${name}`);
+await fs.writeFile(path.join(release, 'SHA256SUMS.txt'), checksums.join('\n') + '\n');
+const exeHash = createHash('sha256').update(await fs.readFile(path.join(portable, 'KurAudio.exe'))).digest('hex');
+await fs.writeFile(path.join(release, `SHA256SUMS-${version}.txt`), [`${exeHash}  release/KurAudio-${version}-windows/KurAudio.exe`, ...checksums.map(line => line.replace('  ', '  release/'))].join('\n') + '\n');
+console.log(`Portable ZIP and SHA-256 manifests updated for ${version}`);

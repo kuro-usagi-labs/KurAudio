@@ -6,7 +6,7 @@ Rilis publik pertama KurAudio: editor audio desktop berbahasa Indonesia dengan t
 
 - **KurAudio-0.11.0-x64-setup.exe** — installer Windows 10/11 x64.
 - **KurAudio-0.11.0-windows.zip** — versi portable; ekstrak seluruh folder sebelum menjalankan `KurAudio.exe`.
-- **KurAudio-0.11.0-source.zip** — source pendamping build asli, termasuk petunjuk dan lisensi dependency.
+- **KurAudio-0.11.0-source.zip** — source pendamping aplikasi, termasuk `LICENSE` MIT, petunjuk build, dan lisensi dependency.
 - **SHA256SUMS.txt** — checksum SHA-256 untuk ketiga berkas di atas.
 
 WebView2 Runtime diperlukan. Installer dapat mengunduhnya jika belum tersedia. Rilis belum ditandatangani sertifikat penerbit; Windows mungkin menampilkan SmartScreen.
@@ -24,10 +24,10 @@ Versi 0.11.0 juga merapikan simpan dari field input, transaksi Undo/Redo, peruba
 
 ## Validasi dan batas
 
-Artefak ini adalah build Windows 30 Oktober 2026. Pada persiapan publikasi, 153 tes unit dan 7 pemeriksaan langsung executable Windows lulus; checksum artefak cocok dengan manifest build asli. Audit build sebelumnya mencatat 95 pemeriksaan native QA. Installer belum diuji melalui instalasi ulang pada Windows bersih.
+Paket Windows diperbarui pada 15 November 2026 untuk menyertakan `LICENSE` MIT dalam installer, portable ZIP, dan source ZIP. Executable aplikasi tetap memakai build 30 Oktober 2026 yang sama; kode aplikasi tidak berubah. Pada persiapan publikasi, 153 tes unit dan 7 pemeriksaan langsung executable Windows lulus. Audit build sebelumnya mencatat 95 pemeriksaan native QA. Installer belum diuji melalui instalasi ulang pada Windows bersih.
 
 Batas impor 100 MB per berkas, total PCM decoded 256 MB, proyek 400 MB, serta ekspor/loop/rekam maksimal 15 menit. Pengujian mikrofon otomatis menggunakan input sintetis; kualitas dan pergantian perangkat fisik belum disertifikasi untuk semua hardware.
 
-Arsip source yang dilampirkan mempertahankan snapshot build asli. Branch `main` menambahkan dokumentasi publikasi dan screenshot; aplikasi tidak dibangun ulang hanya untuk mengganti dokumentasi.
+Source ZIP diperbarui dengan lisensi, dokumentasi, dan konfigurasi packaging terkini. Source runtime aplikasi tetap sesuai dengan build asli. Seluruh checksum diperbarui; gunakan `SHA256SUMS.txt` terbaru untuk memeriksa unduhan. Lisensi dependency tetap berlaku masing-masing. Tag `v0.11.0` mempertahankan referensi publikasi awal; perubahan packaging dan MIT tercatat pada branch `main` serta source ZIP terlampir.
 
 Panduan penggunaan dan pelaporan masalah ada di [README](https://github.com/kuro-usagi-labs/KurAudio#readme).
