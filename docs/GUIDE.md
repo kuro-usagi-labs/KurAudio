@@ -170,20 +170,6 @@ Pasang Visual Studio Build Tools (Desktop development with C++) dan Windows SDK 
 
 Tema berasal dari `design-tokens.json`; `scripts/theme.mjs` menghasilkan `src/theme.css` saat build. Timeline geometry menggunakan detik dan piksel, audio scheduling menggunakan clock AudioContext. Preview dan offline export memakai fungsi `scheduleProject` yang sama.
 
-Lihat [audit dan referensi redesign](docs/REDESIGN-0.2.md), [validasi 0.2](docs/QA-0.2.md), [review desain 0.2](docs/DESIGN-REVIEW-0.2.md), dan [rencana awal](docs/PLAN.md).
+## Catatan versi
 
-Perubahan alur media, shortcut, live trim, efek dan hasil pengujiannya ada di [catatan 0.3](docs/EDITOR-0.3.md).
-
-Perbaikan fatal penutupan Windows dan audit lanjutan ada di [audit 0.3.1](docs/AUDIT-0.3.1.md).
-
-Perbaikan playhead yang masuk ke panel track dan scroll playback ada di [catatan 0.3.2](docs/AUDIT-0.3.2.md).
-
-Interaksi trim dengan waveform yang tetap di tempat, pegangan tepi dan autoscroll diperbaiki di [catatan 0.3.3](docs/AUDIT-0.3.3.md). Simpan proyek dan tutup versi lama sebelum membuka executable baru.
-
-Track otomatis dari drag dan shortcut Ctrl+B dijelaskan di [catatan 0.3.4](docs/AUDIT-0.3.4.md). Space tetap bekerja saat klip mendapat fokus.
-
-Layar awal dan navigasi proyek dijelaskan di [catatan 0.3.5](docs/AUDIT-0.3.5.md).
-
-Tujuh fitur pengeditan 0.4 serta hasil pengujiannya ada di [audit 0.4.0](docs/AUDIT-0.4.0.md). Encoder MP3 menggunakan @breezystack/lamejs 1.2.7/LAME(LGPL-3.0), tanpa modifikasi. Lisensi, sumber upstream yang tepat, dan petunjuk membangun ulang dengan library modifikasi disertakan dalam `third-party/`. Arsip kode aplikasi juga tersedia pada rilis dan installer.
-
-Redesign antarmuka 0.5 dijelaskan pada [rencana dan audit desain](docs/REDESIGN-0.5.md) serta [verifikasi rilis](docs/AUDIT-0.9.1.md).
+Unduhan dan cara build terbaru ada di [README](../README.md). Lihat [audit 0.11.0](AUDIT-0.11.0.md) dan [audit interface](AUDIT-INTERFACE-2026-10-30.md) untuk rincian pengujian. Catatan eksperimen versi lama tidak disertakan dalam repository publik.
